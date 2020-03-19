@@ -38,7 +38,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -85,6 +85,8 @@ func NewCronJobController(kubeClient clientset.Interface) (*CronJobController, e
 		podControl: &realPodControl{KubeClient: kubeClient},
 		recorder:   eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cronjob-controller"}),
 	}
+
+	registerMetrics()
 
 	return jm, nil
 }
@@ -297,6 +299,7 @@ func syncOne(sj *batchv1beta1.CronJob, js []batchv1.Job, now time.Time, jc jobCo
 	}
 	if tooLate {
 		klog.V(4).Infof("Missed starting window for %s", nameForLog)
+		schedulingDecisionSkip.WithLabelValues(sj.Namespace, sj.Name).Inc()
 		recorder.Eventf(sj, v1.EventTypeWarning, "MissSchedule", "Missed scheduled time to start a job: %s", scheduledTime.Format(time.RFC1123Z))
 		// TODO: Since we don't set LastScheduleTime when not scheduling, we are going to keep noticing
 		// the miss every cycle.  In order to avoid sending multiple events, and to avoid processing
@@ -318,6 +321,7 @@ func syncOne(sj *batchv1beta1.CronJob, js []batchv1.Job, now time.Time, jc jobCo
 		// With replace, we could use a name that is deterministic per execution time.
 		// But that would mean that you could not inspect prior successes or failures of Forbid jobs.
 		klog.V(4).Infof("Not starting job for %s because of prior execution still running and concurrency policy is Forbid", nameForLog)
+		schedulingDecisionSkip.WithLabelValues(sj.Namespace, sj.Name).Inc()
 		return
 	}
 	if sj.Spec.ConcurrencyPolicy == batchv1beta1.ReplaceConcurrent {
@@ -326,10 +330,12 @@ func syncOne(sj *batchv1beta1.CronJob, js []batchv1.Job, now time.Time, jc jobCo
 
 			job, err := jc.GetJob(j.Namespace, j.Name)
 			if err != nil {
+				schedulingDecisionSkip.WithLabelValues(sj.Namespace, sj.Name).Inc()
 				recorder.Eventf(sj, v1.EventTypeWarning, "FailedGet", "Get job: %v", err)
 				return
 			}
 			if !deleteJob(sj, job, jc, recorder) {
+				schedulingDecisionSkip.WithLabelValues(sj.Namespace, sj.Name).Inc()
 				return
 			}
 		}
@@ -338,9 +344,11 @@ func syncOne(sj *batchv1beta1.CronJob, js []batchv1.Job, now time.Time, jc jobCo
 	jobReq, err := getJobFromTemplate(sj, scheduledTime)
 	if err != nil {
 		klog.Errorf("Unable to make Job from template in %s: %v", nameForLog, err)
+		schedulingDecisionSkip.WithLabelValues(sj.Namespace, sj.Name).Inc()
 		return
 	}
 	jobResp, err := jc.CreateJob(sj.Namespace, jobReq)
+	schedulingDecisionInvoke.WithLabelValues(sj.Namespace, sj.Name).Inc()
 	if err != nil {
 		recorder.Eventf(sj, v1.EventTypeWarning, "FailedCreate", "Error creating job: %v", err)
 		return
