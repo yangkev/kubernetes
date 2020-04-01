@@ -10,6 +10,13 @@ const (
 	cronjobSubsystem = "cronjob_controller"
 	cronNameKey      = "cronjob"
 	namespaceKey     = "namespace"
+	skipReasonKey    = "reason"
+)
+
+const (
+	skipReasonConcurrencyPolicy = "concurrencyPolicy"
+	skipReasonMissedDeadline    = "missedDeadline"
+	skipReasonError             = "error"
 )
 
 var schedulingDecisionInvoke = prometheus.NewCounterVec(
@@ -26,7 +33,7 @@ var schedulingDecisionSkip = prometheus.NewCounterVec(
 		Name:      "scheduling_decision_skip",
 		Help:      "Counter that increments when the cronjob controller decides to skip a CronJob invocation",
 	},
-	[]string{namespaceKey, cronNameKey})
+	[]string{namespaceKey, cronNameKey, skipReasonKey})
 
 var registerOnce sync.Once
 
