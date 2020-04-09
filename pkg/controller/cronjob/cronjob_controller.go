@@ -103,6 +103,7 @@ func (jm *CronJobController) Run(stopCh <-chan struct{}) {
 
 // syncAll lists all the CronJobs and Jobs and reconciles them.
 func (jm *CronJobController) syncAll() {
+	syncAllStart := time.Now()
 	// List children (Jobs) before parents (CronJob).
 	// This guarantees that if we see any Job that got orphaned by the GC orphan finalizer,
 	// we must also see that the parent CronJob has non-nil DeletionTimestamp (see #42639).
@@ -148,7 +149,10 @@ func (jm *CronJobController) syncAll() {
 		if !ok {
 			return fmt.Errorf("expected type *batchv1beta1.CronJob, got type %T", sj)
 		}
+		syncOneStart := time.Now()
 		syncOne(sj, jobsBySj[sj.UID], time.Now(), jm.jobControl, jm.sjControl, jm.recorder)
+		observeSyncOneWallTime(time.Since(syncOneStart))
+
 		cleanupFinishedJobs(sj, jobsBySj[sj.UID], jm.jobControl, jm.sjControl, jm.recorder)
 		return nil
 	})
@@ -157,6 +161,7 @@ func (jm *CronJobController) syncAll() {
 		utilruntime.HandleError(fmt.Errorf("Failed to extract cronJobs list: %v", err))
 		return
 	}
+	observeSyncAllWallTime(time.Since(syncAllStart))
 }
 
 // cleanupFinishedJobs cleanups finished jobs created by a CronJob
