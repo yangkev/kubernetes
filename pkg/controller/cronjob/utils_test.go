@@ -98,8 +98,13 @@ func TestGetJobFromTemplate(t *testing.T) {
 		t.Errorf("Generated job spec missing %v annotation", jobScheduledTimeAnnotationKey)
 	}
 
-	if observedScheduledTimeAnnotation != expectedScheduledTime.String() {
-		t.Errorf("Wrong %v annotation. Expected %s, got %s.", jobScheduledTimeAnnotationKey, expectedScheduledTime.String(), observedScheduledTimeAnnotation)
+	parsedTime, err := time.Parse(time.RFC1123Z, observedScheduledTimeAnnotation)
+	if err != nil {
+		t.Errorf("Unexpected error parsing time: %v", err)
+	}
+
+	if parsedTime.Format(time.RFC1123Z) != expectedScheduledTime.Format(time.RFC1123Z) {
+		t.Errorf("Wrong %v annotation. Expected %s, got %s.", jobScheduledTimeAnnotationKey, expectedScheduledTime.Format(time.RFC1123Z), parsedTime.Format(time.RFC1123Z))
 	}
 }
 

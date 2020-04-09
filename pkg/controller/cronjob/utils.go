@@ -200,7 +200,7 @@ func getLatestMissedScheduleBinarySearch(startWindow time.Time, endWindow time.T
 func getJobFromTemplate(sj *batchv1beta1.CronJob, scheduledTime time.Time) (*batchv1.Job, error) {
 	labels := copyLabels(&sj.Spec.JobTemplate)
 	annotations := copyAnnotations(&sj.Spec.JobTemplate)
-	annotations[jobScheduledTimeAnnotationKey] = metav1.NewTime(scheduledTime).String()
+	annotations[jobScheduledTimeAnnotationKey] = metav1.NewTime(scheduledTime).Format(time.RFC1123Z)
 
 	// We want job names for a given nominal start time to have a deterministic name to avoid the same job being created twice
 	name := fmt.Sprintf("%s-%d", sj.Name, getTimeHash(scheduledTime))
